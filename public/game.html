@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Game - The Last Ten</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="nav-brand">The Last Ten</div>
+    <div class="nav-user">
+      <span id="username"></span>
+      <button onclick="logout()" class="btn-secondary">Logout</button>
+    </div>
+  </nav>
+  
+  <main class="game-container">
+    <h1>Welcome, <span id="welcomeUser"></span>!</h1>
+    <div class="game-area">
+      <p>Game coming soon...</p>
+      <div class="placeholder-game">
+        <div class="game-box">🎮</div>
+        <p>Your game will go here</p>
+      </div>
+    </div>
+  </main>
+  
+  <script>
+    // Load user info
+    fetch('/api/me')
+      .then(r => r.json())
+      .then(user => {
+        document.getElementById('username').textContent = user.username;
+        document.getElementById('welcomeUser').textContent = user.username;
+      })
+      .catch(() => window.location.href = '/login');
+    
+    function logout() {
+      fetch('/api/logout', { method: 'POST' })
+        .then(() => window.location.href = '/login');
+    }
+  </script>
+</body>
+</html>
