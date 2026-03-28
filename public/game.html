@@ -172,14 +172,33 @@
       color: #ffff44;
       margin: 0 0 10px 0;
     }
-    #family-marker {
-      position: absolute;
-      width: 20px;
-      height: 20px;
-      background: #ff6666;
-      border-radius: 50%;
-      border: 3px solid #ffff44;
-      z-index: 90;
+    #map-container {
+      position: fixed;
+      top: 80px;
+      left: 20px;
+      width: 200px;
+      height: 200px;
+      background: rgba(0, 20, 0, 0.9);
+      border: 2px solid #00ff00;
+      border-radius: 8px;
+      z-index: 100;
+      display: none;
+    }
+    #map-canvas {
+      width: 100%;
+      height: 100%;
+    }
+    #map-toggle {
+      position: fixed;
+      top: 80px;
+      left: 20px;
+      background: rgba(0, 0, 0, 0.8);
+      border: 1px solid #00ff00;
+      color: #00ff00;
+      padding: 8px 15px;
+      cursor: pointer;
+      z-index: 101;
+      font-family: 'Courier New', monospace;
     }
   </style>
 </head>
@@ -244,6 +263,11 @@
     <p style="color: #ff6666; font-size: 12px;">Family status: CAPTURED</p>
   </div>
 
+  <button id="map-toggle" onclick="toggleMap()">🗺️ MAP</button>
+  <div id="map-container">
+    <canvas id="map-canvas" width="200" height="200"></canvas>
+  </div>
+
   <div id="game-container"></div>
 
   <script type="importmap">
@@ -279,7 +303,13 @@
     
     let isAiming = false;
     let isPaused = false;
+    // World settings
     const worldSize = 200;
+    const bunkerExit = { x: 5, z: 5 };
+    let inBunker = true;
+    
+    // Bunker interior objects
+    const bunkerObjects = [];
     
     // Family rescue - alien compound location
     const compoundLocation = { x: 80, z: 80 };
@@ -343,10 +373,15 @@
       raycaster = new THREE.Raycaster();
 
       // Build world
+      createBunker();
       createTerrain();
       createRuins();
       createLoot();
       createEnemies();
+
+      // Start in bunker
+      camera.position.set(0, 1.6, 0);
+      camera.rotation.set(0, Math.PI / 4, 0);
 
       // Start loop
       renderer.setAnimationLoop(animate);
@@ -413,6 +448,95 @@
       }
     }
 
+    function createBunker() {
+      // Bunker walls
+      const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x555555 });
+      
+      // Floor
+      const floorGeometry = new THREE.PlaneGeometry(20, 20);
+      floorGeometry.rotateX(-Math.PI / 2);
+      const floor = new THREE.Mesh(floorGeometry, new THREE.MeshStandardMaterial({ color: 0x333333 }));
+      floor.receiveShadow = true;
+      scene.add(floor);
+      bunkerObjects.push(floor);
+      
+      // Walls
+      const wallPositions = [
+        { x: 0, z: -10, w: 20, h: 4, d: 0.5 },
+        { x: 0, z: 10, w: 20, h: 4, d: 0.5 },
+        { x: -10, z: 0, w: 0.5, h: 4, d: 20 },
+        { x: 10, z: 0, w: 0.5, h: 4, d: 20 }
+      ];
+      
+      wallPositions.forEach(pos => {
+        const wall = new THREE.Mesh(
+          new THREE.BoxGeometry(pos.w, pos.h, pos.d),
+          wallMaterial
+        );
+        wall.position.set(pos.x, pos.h / 2, pos.z);
+        wall.castShadow = true;
+        scene.add(wall);
+        bunkerObjects.push(wall);
+      });
+      
+      // Exit door
+      const door = new THREE.Mesh(
+        new THREE.BoxGeometry(3, 3, 0.5),
+        new THREE.MeshStandardMaterial({ color: 0x8B4513 })
+      );
+      door.position.set(5, 1.5, 10);
+      door.userData = { type: 'door', name: 'BUNKER EXIT' };
+      scene.add(door);
+      interactables.push(door);
+      
+      // Supplies in bunker
+      const supplyGeometry = new THREE.BoxGeometry(1, 0.8, 1);
+      const supplyMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x4444ff,
+        emissive: 0x4444ff,
+        emissiveIntensity: 0.3
+      });
+      const supplies = new THREE.Mesh(supplyGeometry, supplyMaterial);
+      supplies.position.set(-3, 0.4, -3);
+      supplies.userData = { type: 'loot', item: { name: 'Bunker Supplies', heal: 50 } };
+      scene.add(supplies);
+      interactables.push(supplies);
+      
+      // Table
+      const table = new THREE.Mesh(
+        new THREE.BoxGeometry(2, 1, 1),
+        new THREE.MeshStandardMaterial({ color: 0x4a3728 })
+      );
+      table.position.set(0, 0.5, 0);
+      table.castShadow = true;
+      scene.add(table);
+      bunkerObjects.push(table);
+      
+      // Note on table
+      const note = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.5, 0.3),
+        new THREE.MeshStandardMaterial({ color: 0xffffaa })
+      );
+      note.rotation.x = -Math.PI / 2;
+      note.position.set(0, 1.01, 0);
+      note.userData = { type: 'note', text: 'Sarah and Emma were taken to the compound at coordinates 80, 80. The aliens are experimenting on survivors. Find them before it is too late. - Resistance' };
+      scene.add(note);
+    }
+
+    function exitBunker() {
+      inBunker = false;
+      
+      // Remove bunker walls
+      bunkerObjects.forEach(obj => scene.remove(obj));
+      
+      // Move player outside
+      camera.position.set(bunkerExit.x, 1.6, bunkerExit.z);
+      
+      alert('You emerge from the bunker into the wasteland...');
+      
+      // Update objective
+      document.querySelector('#objective p').textContent = 'Find the alien compound at coordinates 80, 80';
+    }
     function togglePause() {
       if (!controls.isLocked && document.getElementById('instructions').style.display === 'block') return;
       
@@ -427,6 +551,77 @@
         menu.style.display = 'none';
         controls.lock();
       }
+    }
+
+    window.toggleMap = function() {
+      const map = document.getElementById('map-container');
+      map.style.display = map.style.display === 'none' ? 'block' : 'none';
+      if (map.style.display === 'block') {
+        drawMap();
+      }
+    };
+
+    function drawMap() {
+      const canvas = document.getElementById('map-canvas');
+      const ctx = canvas.getContext('2d');
+      
+      // Clear
+      ctx.fillStyle = '#001400';
+      ctx.fillRect(0, 0, 200, 200);
+      
+      // Draw grid
+      ctx.strokeStyle = '#003300';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 200; i += 20) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i, 200);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, i);
+        ctx.lineTo(200, i);
+        ctx.stroke();
+      }
+      
+      // Scale: 200px = 200 units, so center is 100,100
+      const scale = 1;
+      const offsetX = 100;
+      const offsetZ = 100;
+      
+      // Draw bunker (center)
+      ctx.fillStyle = '#444444';
+      ctx.fillRect(offsetX - 10, offsetZ - 10, 20, 20);
+      
+      // Draw compound
+      ctx.fillStyle = '#ff0000';
+      ctx.beginPath();
+      ctx.arc(offsetX + compoundLocation.x * scale, offsetZ + compoundLocation.z * scale, 8, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Draw player position
+      const px = offsetX + camera.position.x * scale;
+      const pz = offsetZ + camera.position.z * scale;
+      ctx.fillStyle = '#00ff00';
+      ctx.beginPath();
+      ctx.arc(px, pz, 5, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Draw player direction
+      ctx.strokeStyle = '#00ff00';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(px, pz);
+      ctx.lineTo(px + Math.sin(camera.rotation.y) * 15, pz + Math.cos(camera.rotation.y) * 15);
+      ctx.stroke();
+      
+      // Labels
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '10px monospace';
+      ctx.fillText('BUNKER', offsetX - 20, offsetZ - 15);
+      ctx.fillStyle = '#ff6666';
+      ctx.fillText('COMPOUND', offsetX + compoundLocation.x - 25, offsetZ + compoundLocation.z - 12);
+      ctx.fillStyle = '#00ff00';
+      ctx.fillText('YOU', px - 10, pz - 8);
     }
 
     function saveGame() {
@@ -714,6 +909,13 @@
       if (intersects.length > 0 && intersects[0].distance < 3) {
         const object = intersects[0].object;
         
+        if (object.userData.type === 'door') {
+          if (inBunker) {
+            exitBunker();
+          }
+          return;
+        }
+        
         if (object.userData.type === 'loot') {
           const item = object.userData.item;
           items.push(item);
@@ -725,6 +927,10 @@
           scene.remove(object);
           interactables.splice(interactables.indexOf(object), 1);
           updateHUD();
+        }
+        
+        if (object.userData.type === 'note') {
+          alert(object.userData.text);
         }
       }
     }
@@ -743,7 +949,14 @@
       const prompt = document.getElementById('interact-prompt');
       if (intersects.length > 0 && intersects[0].distance < 3) {
         prompt.style.display = 'block';
-        prompt.textContent = `[E] ${intersects[0].object.userData.item.name}`;
+        const obj = intersects[0].object;
+        if (obj.userData.type === 'door') {
+          prompt.textContent = '[E] EXIT BUNKER';
+        } else if (obj.userData.type === 'note') {
+          prompt.textContent = '[E] READ NOTE';
+        } else {
+          prompt.textContent = `[E] ${obj.userData.item.name}`;
+        }
       } else {
         prompt.style.display = 'none';
       }
