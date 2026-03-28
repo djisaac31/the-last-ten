@@ -35,7 +35,7 @@
       font-size: 14px;
       text-shadow: 0 0 10px #00ff00;
       z-index: 100;
-      background: rgba(0, 0, 0, 0.7);
+      background: rgba(239, 177, 177, 0.7);
       padding: 15px;
       border-radius: 8px;
       min-width: 200px;
@@ -202,13 +202,15 @@
     <br>
     <p><strong>Mission: Infiltrate the alien compound. Save your family.</strong></p>
     <br>
+    <div style="display: flex; gap: 20px; justify-content: center; margin: 20px 0;">
+      <button onclick="startNewGame()" style="background: #ff6666; color: white;">🎮 NEW GAME</button>
+      <button onclick="loadSavedGameStart()" style="background: #4444ff; color: white;">📂 LOAD GAME</button>
+    </div>
+    <br>
     <p><strong>Controls:</strong></p>
     <p>WASD - Move | Mouse - Look</p>
     <p>E - Interact | Right-Click - Aim</p>
-    <p>Left-Click - Shoot (when aiming)</p>
-    <p>Shift - Sprint | ESC - Save/Menu</p>
-    <br>
-    <button onclick="startGame()">BEGIN RESCUE</button>
+    <p>Left-Click - Shoot | Shift - Sprint | ESC - Menu</p>
   </div>
 
   <div id="crosshair"></div>
@@ -824,9 +826,24 @@
     }
 
     // Global functions
-    window.startGame = function() {
+    window.startNewGame = function() {
+      // Clear any old save for fresh start
+      localStorage.removeItem(SAVE_KEY);
       document.getElementById('instructions').style.display = 'none';
       controls.lock();
+    };
+
+    window.loadSavedGameStart = function() {
+      const saved = localStorage.getItem(SAVE_KEY);
+      if (saved) {
+        const data = JSON.parse(saved);
+        restoreGameData(data);
+        document.getElementById('instructions').style.display = 'none';
+        controls.lock();
+        alert('Welcome back. Your family is still counting on you.');
+      } else {
+        alert('No saved game found. Start a new game?');
+      }
     };
 
     window.logout = function() {
