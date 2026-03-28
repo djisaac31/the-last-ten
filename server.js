@@ -1,32 +1,39 @@
 const express = require('express');
 const session = require('express-session');
 const bcrypt = require('bcrypt');
-const sqlite3 = require('sqlite3').verbose();
+const mongoose = require('mongoose');
 const path = require('path');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
-// Database setup
-const db = new sqlite3.Database('./users.db');
-db.serialize(() => {
-  db.run(`CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
+// MongoDB Atlas connection
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/thelastten';
+mongoose.connect(MONGODB_URI)
+  .then(() => console.log('Connected to MongoDB'))
+  .catch(err => console.error('MongoDB error:', err));
+
+// User Schema
+const userSchema = new mongoose.Schema({
+  username: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now }
 });
+
+const User = mongoose.model('User', userSchema);
 
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 app.use(session({
-  secret: 'your-secret-key-change-this',
+  secret: process.env.SESSION_SECRET || 'your-secret-key-change-this',
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: false }
+  cookie: { 
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
 }));
 
 // Auth middleware
@@ -80,37 +87,34 @@ app.post('/api/signup', async (req, res) => {
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
     
-    db.run('INSERT INTO users (username, password) VALUES (?, ?)', 
-      [username, hashedPassword], 
-      function(err) {
-        if (err) {
-          if (err.message.includes('UNIQUE constraint failed')) {
-            return res.status(400).json({ error: 'Username already exists' });
-          }
-          return res.status(500).json({ error: 'Database error' });
-        }
-        req.session.userId = this.lastID;
-        req.session.username = username;
-        res.json({ success: true, username });
-      }
-    );
+    const user = new User({
+      username,
+      password: hashedPassword
+    });
+    
+    await user.save();
+    
+    req.session.userId = user._id;
+    req.session.username = username;
+    res.json({ success: true, username });
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({ error: 'Username already exists' });
+    }
     res.status(500).json({ error: 'Server error' });
   }
 });
 
 // API: Login
-app.post('/api/login', (req, res) => {
+app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
   
   if (!username || !password) {
     return res.status(400).json({ error: 'Username and password required' });
   }
   
-  db.get('SELECT * FROM users WHERE username = ?', [username], async (err, user) => {
-    if (err) {
-      return res.status(500).json({ error: 'Database error' });
-    }
+  try {
+    const user = await User.findOne({ username });
     
     if (!user) {
       return res.status(400).json({ error: 'Invalid credentials' });
@@ -121,10 +125,12 @@ app.post('/api/login', (req, res) => {
       return res.status(400).json({ error: 'Invalid credentials' });
     }
     
-    req.session.userId = user.id;
+    req.session.userId = user._id;
     req.session.username = user.username;
     res.json({ success: true, username: user.username });
-  });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 // API: Logout
