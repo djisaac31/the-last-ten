@@ -827,10 +827,33 @@
 
     // Global functions
     window.startNewGame = function() {
-      // Clear any old save for fresh start
+      // Reset player to spawn position
+      camera.position.set(0, 1.6, 0);
+      camera.rotation.set(0, 0, 0);
+      
+      // Reset stats
+      health = 100;
+      actionPoints = 100;
+      radiation = 0;
+      items = [];
+      familyRescued = false;
+      
+      // Clear any old save
       localStorage.removeItem(SAVE_KEY);
+      
+      // Update HUD
+      updateHUD();
+      updateObjective();
+      
+      // Hide menu and start game
       document.getElementById('instructions').style.display = 'none';
+      document.getElementById('save-menu').style.display = 'none';
+      
+      // Lock controls and render
       controls.lock();
+      renderer.render(scene, camera);
+      
+      console.log('Game started - position:', camera.position);
     };
 
     window.loadSavedGameStart = function() {
