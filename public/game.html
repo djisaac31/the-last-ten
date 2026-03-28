@@ -291,8 +291,8 @@
     function init() {
       // Scene setup
       scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x8B7355);
-      scene.fog = new THREE.Fog(0x8B7355, 0, 100);
+      scene.background = new THREE.Color(0x87CEEB);
+      scene.fog = new THREE.Fog(0x8B7355, 10, 150);
 
       // Camera
       camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -306,10 +306,13 @@
       document.getElementById('game-container').appendChild(renderer.domElement);
 
       // Lighting
-      const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
       scene.add(ambientLight);
 
-      const sunLight = new THREE.DirectionalLight(0xffaa44, 1);
+      const hemiLight = new THREE.HemisphereLight(0x87CEEB, 0x8B7355, 0.6);
+      scene.add(hemiLight);
+
+      const sunLight = new THREE.DirectionalLight(0xffffff, 1.2);
       sunLight.position.set(50, 100, 50);
       sunLight.castShadow = true;
       sunLight.shadow.camera.left = -100;
@@ -500,6 +503,8 @@
       isPaused = false;
       document.getElementById('save-menu').style.display = 'none';
       controls.lock();
+      // Force render when resuming
+      renderer.render(scene, camera);
     }
 
     function exitGame() {
@@ -827,7 +832,7 @@
 
     // Global functions
     window.startNewGame = function() {
-      // Reset player to spawn position
+      // Reset player to spawn position - look toward the compound
       camera.position.set(0, 1.6, 0);
       camera.rotation.set(0, 0, 0);
       
@@ -849,8 +854,10 @@
       document.getElementById('instructions').style.display = 'none';
       document.getElementById('save-menu').style.display = 'none';
       
-      // Lock controls and render
+      // Lock controls
       controls.lock();
+      
+      // Force a render to show the world immediately
       renderer.render(scene, camera);
       
       console.log('Game started - position:', camera.position);
