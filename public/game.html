@@ -120,19 +120,66 @@
       background: #00ff00;
       color: black;
     }
-    #interact-prompt {
+    #save-menu {
       position: fixed;
-      bottom: 150px;
+      top: 50%;
       left: 50%;
-      transform: translateX(-50%);
-      color: #ffff44;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.95);
+      color: #00ff00;
+      padding: 40px;
+      border-radius: 10px;
+      text-align: center;
+      z-index: 300;
       font-family: 'Courier New', monospace;
-      font-size: 16px;
-      background: rgba(0, 0, 0, 0.8);
-      padding: 10px 20px;
-      border-radius: 5px;
+      border: 2px solid #00ff00;
       display: none;
+      min-width: 300px;
+    }
+    #save-menu h2 {
+      color: #ff6666;
+      margin-bottom: 30px;
+    }
+    #save-menu button {
+      background: #00ff00;
+      color: black;
+      border: none;
+      padding: 15px 30px;
+      font-size: 16px;
+      cursor: pointer;
+      margin: 10px;
+      font-weight: bold;
+      width: 200px;
+    }
+    #save-menu button:hover {
+      background: #00cc00;
+    }
+    #objective {
+      position: fixed;
+      top: 80px;
+      right: 20px;
+      color: #ff6666;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 15px;
+      border-radius: 8px;
+      border: 1px solid #ff6666;
       z-index: 100;
+      max-width: 250px;
+    }
+    #objective h3 {
+      color: #ffff44;
+      margin: 0 0 10px 0;
+    }
+    #family-marker {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      background: #ff6666;
+      border-radius: 50%;
+      border: 3px solid #ffff44;
+      z-index: 90;
     }
   </style>
 </head>
@@ -146,19 +193,22 @@
   </div>
 
   <div id="instructions">
-    <h2>☢️ THE LAST TEN ☢️</h2>
-    <p>Post-apocalyptic wasteland survival</p>
+    <h2>👽 THE LAST TEN 👽</h2>
+    <p><strong>Year 2084. The bombs fell. Then THEY came.</strong></p>
+    <br>
+    <p style="max-width: 500px; text-align: left; margin: 0 auto;">
+      The aliens arrived during the nuclear winter. They descended from shattered skies in their biomechanical ships, harvesting survivors for their experiments. You were scavenging in the ruins when they took them—your wife Sarah and your daughter Emma. The resistance tracked their ship to a compound 2 miles east. You're the only one left who can save them.
+    </p>
+    <br>
+    <p><strong>Mission: Infiltrate the alien compound. Save your family.</strong></p>
     <br>
     <p><strong>Controls:</strong></p>
-    <p>WASD - Move</p>
-    <p>Mouse - Look around</p>
-    <p>E - Interact / Pick up</p>
-    <p>Right-Click - Aim</p>
+    <p>WASD - Move | Mouse - Look</p>
+    <p>E - Interact | Right-Click - Aim</p>
     <p>Left-Click - Shoot (when aiming)</p>
-    <p>Shift - Sprint (uses AP)</p>
+    <p>Shift - Sprint | ESC - Save/Menu</p>
     <br>
-    <p>Find supplies, survive the wasteland.</p>
-    <button onclick="startGame()">ENTER THE WASTELAND</button>
+    <button onclick="startGame()">BEGIN RESCUE</button>
   </div>
 
   <div id="crosshair"></div>
@@ -171,6 +221,26 @@
   </div>
 
   <div id="interact-prompt">[E] PICK UP</div>
+
+  <div id="save-menu">
+    <h2>GAME MENU</h2>
+    <p>Family rescue in progress...</p>
+    <br>
+    <button onclick="saveGame()">💾 SAVE PROGRESS</button>
+    <br>
+    <button onclick="loadGame()">📂 LOAD GAME</button>
+    <br>
+    <button onclick="resumeGame()">▶️ RESUME</button>
+    <br>
+    <button onclick="exitGame()">🚪 EXIT TO MENU</button>
+  </div>
+
+  <div id="objective">
+    <h3>📍 CURRENT OBJECTIVE</h3>
+    <p>Find the alien compound</p>
+    <p style="color: #888; font-size: 12px; margin-top: 10px;">Distance: <span id="distance">???</span>m</p>
+    <p style="color: #ff6666; font-size: 12px;">Family status: CAPTURED</p>
+  </div>
 
   <div id="game-container"></div>
 
@@ -206,7 +276,15 @@
     let raycaster;
     
     let isAiming = false;
+    let isPaused = false;
     const worldSize = 200;
+    
+    // Family rescue - alien compound location
+    const compoundLocation = { x: 80, z: 80 };
+    let familyRescued = false;
+    
+    // Save/load keys
+    const SAVE_KEY = 'theLastTen_save';
     
     function init() {
       // Scene setup
@@ -252,6 +330,9 @@
       document.addEventListener('mousedown', onMouseDown);
       document.addEventListener('contextmenu', e => e.preventDefault());
       window.addEventListener('resize', onWindowResize);
+      
+      // Load saved game if exists
+      loadSavedGame();
 
       // Raycaster for interaction
       raycaster = new THREE.Raycaster();
@@ -327,7 +408,117 @@
       }
     }
 
-    function createRuins() {
+    function togglePause() {
+      if (!controls.isLocked && document.getElementById('instructions').style.display === 'block') return;
+      
+      isPaused = !isPaused;
+      const menu = document.getElementById('save-menu');
+      
+      if (isPaused) {
+        controls.unlock();
+        menu.style.display = 'block';
+        updateObjective();
+      } else {
+        menu.style.display = 'none';
+        controls.lock();
+      }
+    }
+
+    function saveGame() {
+      const gameData = {
+        health,
+        actionPoints,
+        radiation,
+        items,
+        position: {
+          x: camera.position.x,
+          y: camera.position.y,
+          z: camera.position.z
+        },
+        rotation: {
+          x: camera.rotation.x,
+          y: camera.rotation.y,
+          z: camera.rotation.z
+        },
+        familyRescued,
+        enemiesKilled: enemies.length,
+        timestamp: Date.now()
+      };
+      
+      localStorage.setItem(SAVE_KEY, JSON.stringify(gameData));
+      
+      // Also save to server
+      fetch('/api/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(gameData)
+      }).catch(() => {});
+      
+      alert('Game saved! Your family is counting on you.');
+    }
+
+    function loadGame() {
+      const saved = localStorage.getItem(SAVE_KEY);
+      if (saved) {
+        const data = JSON.parse(saved);
+        restoreGameData(data);
+        alert('Game loaded. Continue your mission.');
+        resumeGame();
+      } else {
+        alert('No save file found.');
+      }
+    }
+
+    function loadSavedGame() {
+      const saved = localStorage.getItem(SAVE_KEY);
+      if (saved) {
+        const data = JSON.parse(saved);
+        restoreGameData(data);
+      }
+    }
+
+    function restoreGameData(data) {
+      health = data.health || 100;
+      actionPoints = data.actionPoints || 100;
+      radiation = data.radiation || 0;
+      items = data.items || [];
+      familyRescued = data.familyRescued || false;
+      
+      if (data.position) {
+        camera.position.set(data.position.x, data.position.y, data.position.z);
+      }
+      if (data.rotation) {
+        camera.rotation.set(data.rotation.x, data.rotation.y, data.rotation.z);
+      }
+      
+      updateHUD();
+    }
+
+    function resumeGame() {
+      isPaused = false;
+      document.getElementById('save-menu').style.display = 'none';
+      controls.lock();
+    }
+
+    function exitGame() {
+      if (confirm('Exit to main menu? Unsaved progress will be lost.')) {
+        window.location.href = '/login';
+      }
+    }
+
+    function updateObjective() {
+      const dist = Math.sqrt(
+        (camera.position.x - compoundLocation.x) ** 2 +
+        (camera.position.z - compoundLocation.z) ** 2
+      );
+      document.getElementById('distance').textContent = Math.floor(dist);
+      
+      if (dist < 20 && !familyRescued) {
+        document.querySelector('#objective p').textContent = 'COMPOUND REACHED - Find Sarah and Emma!';
+      }
+    }
+
+    function createCompound() {
       // Abandoned buildings
       const buildingPositions = [
         { x: 20, z: 20 },
@@ -433,7 +624,7 @@
         case 'ArrowRight':
         case 'KeyD': moveRight = true; break;
         case 'ShiftLeft': sprint = true; break;
-        case 'KeyE': interact(); break;
+        case 'Escape': togglePause(); break;
       }
     }
 
